@@ -1,0 +1,112 @@
+---
+title: "Extracting lyrics and sentiment for Music dataset"
+output: html_notebook
+---
+
+#Introduction:
+
+This is a short notebook showing how to utilize the "genius" package to download the lyrics for a large dataset of tracks. 
+
+I will also utilize the "sentimentr" package to add a column for the sentiment score of the lyrics of each song, which I will utilize at a later date.
+
+
+
+Load the libraries.
+
+```{r}
+library(genius)
+library(tidyverse)
+library(sentimentr)
+```
+
+
+I believe the original dataset is the sample of 10,000 songs from the "Million Song Dataset"; and has been cleaned using Kris Shaffer's approach in his Medium article, "Exploring musical data with R: An introduction to computational music analysis".
+
+
+Load the dataset:
+
+
+```{r}
+mdata <- read.csv('MSD_master_data.csv')
+
+```
+
+
+
+Here's the code to extract lyrics and add it to the dataset. This might seem unnecessary because of the musiXmatch dataset that includes the lyrics of the "Million Song Dataset"; but it's a good exercise in how to utilize a package for downloading a large amount of data.
+
+The code below utilizes tryCatch() to work around the errors brought on by the song titles/Artist names in the dataset not matching perfectly with the song titles and artist names on Genius.com's website. tryCatch() must be used carefully, but in this case where we're getting repeated errors caused by incorrect web addresses, I think it's fine to use.
+
+
+This code will take a little while to run:
+
+```{r}
+length1 <- length(mdata$title)
+mdata <- mdata %>% mutate(lyrics = "null") #adds a column of "null" for lyrics
+
+
+
+for(i in 1:length1){
+
+  lyric1 <- tryCatch(error = function(x) 0, genius_lyrics(artist = mdata$artist_name[i],  song = mdata$title[i])) #Returns 0 instead of causing an error
+  
+  ifelse(lyric1 == 0, mdata$lyrics[i] <- "null",  mdata$lyrics[i] <- paste(lyric1$lyric, collapse=" ") )
+ 
+}
+
+
+```
+
+
+Can now filter for songs where we were able to extract the lyrics:
+
+
+```{r}
+mdata <- mdata %>% filter(lyrics != "null")
+
+```
+
+
+I will use the sentimentr package to rate the cumulative word sentiments for each song's lyrics. Sentimentr is great for its simplicity and for its algorithm which takes "valence shifters" into account. 
+
+In sentimentr, each word is rated with positive(+1 weight) or negative (-1 weight) which is then effected by the surrounding context of the word. It's positive/negative rating is based off lexicons from the "lexicon" R package.
+
+
+
+```{r}
+mdata <- mdata %>% mutate(lyrics = as.character(lyrics))
+
+#Use sentimentr to create data frame of sentiments
+
+lsentiment <- sentiment_by(mdata$lyrics)
+lsentiment
+mdata <- mdata %>% mutate(sentiment = lsentiment$ave_sentiment)
+
+head(mdata$sentiment)
+```
+
+
+We can write the resulting dataset to a csv file with write.csv() for use in future analysis.
+
+
+```{r}
+write.csv(mdata, file = 'MSD_master_data_lyrics_sent.csv')
+```
+
+
+
+
+-------------------------------
+
+Citations:
+
+Million Song Dataset:
+
+Thierry Bertin-Mahieux, Daniel P.W. Ellis, Brian Whitman, and Paul Lamere. 
+The Million Song Dataset. In Proceedings of the 12th International Society
+for Music Information Retrieval Conference (ISMIR 2011), 2011.
+
+Kris Schaffer:
+
+https://medium.com/@krisshaffer/exploring-musical-data-with-r-an-introduction-to-computational-music-analysis-2216d061fed6
+
